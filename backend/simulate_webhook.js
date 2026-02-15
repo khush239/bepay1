@@ -72,9 +72,9 @@ async function runSimulation() {
 
 
         if (updatedPayout.status === 'COMPLETED') {
-            console.log('✅ SUCCESS: Webhook updated payout status!');
+            console.log(' SUCCESS: Webhook updated payout status!');
         } else {
-            console.error('❌ FAILURE: Status did not update.');
+            console.error(' FAILURE: Status did not update.');
         }
 
     } catch (error) {
