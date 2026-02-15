@@ -1,13 +1,33 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
 
-const organizationSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-    kycStatus: { type: String, default: 'PENDING', enum: ['PENDING', 'VERIFIED', 'REJECTED'] },
-    kycData: { type: String },
-    apiKey: { type: String, unique: true, sparse: true },
-    mestaOrgId: { type: String },
-    balance: { type: Number, default: 0.0 },
+const Organization = sequelize.define('Organization', {
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    name: { type: DataTypes.STRING, allowNull: false },
+    userId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        unique: true
+    },
+    kycStatus: {
+        type: DataTypes.ENUM('PENDING', 'VERIFIED', 'REJECTED'),
+        defaultValue: 'PENDING'
+    },
+    kycData: { type: DataTypes.TEXT },
+    apiKey: { type: DataTypes.STRING, unique: true },
+    mestaOrgId: { type: DataTypes.STRING },
+    balance: {
+        type: DataTypes.DECIMAL(10, 2), // Better for money than FLOAT
+        defaultValue: 0.00,
+        get() {
+            const value = this.getDataValue('balance');
+            return value === null ? null : parseFloat(value);
+        }
+    },
 }, { timestamps: true });
 
-module.exports = mongoose.model('Organization', organizationSchema);
+module.exports = Organization;

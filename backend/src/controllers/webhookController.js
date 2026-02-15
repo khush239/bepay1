@@ -1,7 +1,5 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleMestaWebhook = void 0;
-const Payout = require("../models/Payout");
+const { Payout } = require("../models");
 
 const handleMestaWebhook = async (req, res) => {
     try {
@@ -14,14 +12,14 @@ const handleMestaWebhook = async (req, res) => {
             const { id, status } = event.data;
 
             // Find payout by Mesta ID
-            const payout = await Payout.findOne({ mestaPayoutId: id });
+            const payout = await Payout.findOne({ where: { mestaPayoutId: id } });
 
             if (payout) {
-                await Payout.findByIdAndUpdate(
-                    payout._id,
-                    { status }
+                await Payout.update(
+                    { status },
+                    { where: { id: payout.id } }
                 );
-                console.log(`Updated payout ${payout._id} to ${status}`);
+                console.log(`Updated payout ${payout.id} to ${status}`);
             }
         }
         res.status(200).send('OK');
@@ -31,4 +29,7 @@ const handleMestaWebhook = async (req, res) => {
         res.status(500).send('Server Error');
     }
 };
-exports.handleMestaWebhook = handleMestaWebhook;
+
+module.exports = {
+    handleMestaWebhook
+};

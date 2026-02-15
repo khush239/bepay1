@@ -1,17 +1,17 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMe = exports.login = exports.register = void 0;
 const bcrypt = require("bcryptjs");
-const jwt_1 = require("../utils/jwt");
-const User = require("../models/User");
-const Organization = require("../models/Organization");
+const { generateToken } = require("../utils/jwt");
+const { User, Organization } = require("../models");
+const sequelize = require("../config/database");
 
 const register = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const { email, password, name, organizationName } = req.body;
         // Check if user exists
-        const existingUser = await User.findOne({ email });
+        const existingUser = await User.findOne({ where: { email } });
         if (existingUser) {
+            await t.rollback();
             return res.status(400).json({ message: 'User already exists' });
         }
         // Hash password
@@ -22,40 +22,42 @@ const register = async (req, res) => {
             email,
             password: hashedPassword,
             name,
-            role: 'USER', // Default role
-        });
+            role: 'USER',
+        }, { transaction: t });
 
         // Create organization
         const organization = await Organization.create({
             name: organizationName || `${name}'s Organization`,
-            userId: user._id,
+            userId: user.id,
             kycStatus: 'PENDING',
-        });
+        }, { transaction: t });
 
-        const token = (0, jwt_1.generateToken)(user._id);
+        await t.commit();
+
+        const token = generateToken(user.id);
         res.status(201).json({
             message: 'User registered successfully',
             token,
             user: {
-                id: user._id,
+                id: user.id,
                 email: user.email,
                 name: user.name,
                 role: user.role,
-                organizationId: organization._id,
+                organizationId: organization.id,
             },
         });
     }
     catch (error) {
+        await t.rollback();
         console.error('Register error:', error);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
-exports.register = register;
 
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ where: { email } });
 
         if (!user) {
             return res.status(400).json({ message: 'Invalid credentials' });
@@ -65,18 +67,18 @@ const login = async (req, res) => {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
-        const organization = await Organization.findOne({ userId: user._id });
+        const organization = await Organization.findOne({ where: { userId: user.id } });
 
-        const token = (0, jwt_1.generateToken)(user._id);
+        const token = generateToken(user.id);
         res.json({
             message: 'Login successful',
             token,
             user: {
-                id: user._id,
+                id: user.id,
                 email: user.email,
                 name: user.name,
                 role: user.role,
-                organizationId: organization?._id,
+                organizationId: organization?.id,
             },
         });
     }
@@ -85,19 +87,18 @@ const login = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-exports.login = login;
 
 const getMe = async (req, res) => {
     try {
         const user = req.user; // Set by authMiddleware
-        const organization = await Organization.findOne({ userId: user._id });
+        const organization = await Organization.findOne({ where: { userId: user.id } });
         res.json({
             user: {
-                id: user._id,
+                id: user.id,
                 email: user.email,
                 name: user.name,
                 role: user.role,
-                organizationId: organization?._id,
+                organizationId: organization?.id,
                 accountNumber: user.accountNumber,
                 bankName: user.bankName,
                 balance: organization?.balance || 0,
@@ -109,4 +110,9 @@ const getMe = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-exports.getMe = getMe;
+
+module.exports = {
+    register,
+    login,
+    getMe
+};

@@ -1,21 +1,38 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
 
-const payoutSchema = new mongoose.Schema({
-    amount: { type: Number, required: true },
-    currency: { type: String, required: true },
-    status: { type: String, default: 'PENDING', enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'] },
-    description: { type: String },
-    type: { type: String, default: 'EXTERNAL', enum: ['EXTERNAL', 'INTERNAL'] },
+const Payout = sequelize.define('Payout', {
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    amount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        get() {
+            const value = this.getDataValue('amount');
+            return value === null ? null : parseFloat(value);
+        }
+    },
+    currency: { type: DataTypes.STRING, allowNull: false },
+    status: {
+        type: DataTypes.ENUM('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'),
+        defaultValue: 'PENDING'
+    },
+    description: { type: DataTypes.STRING },
+    type: {
+        type: DataTypes.ENUM('EXTERNAL', 'INTERNAL'),
+        defaultValue: 'EXTERNAL'
+    },
 
-    // External Transfer
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization' },
-    beneficiaryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Beneficiary' },
+    // Foreign Keys
+    organizationId: { type: DataTypes.UUID },
+    beneficiaryId: { type: DataTypes.UUID },
+    senderId: { type: DataTypes.UUID },
+    receiverId: { type: DataTypes.UUID },
 
-    // Internal Transfer
-    senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    receiverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-
-    mestaPayoutId: { type: String },
+    mestaPayoutId: { type: DataTypes.STRING },
 }, { timestamps: true });
 
-module.exports = mongoose.model('Payout', payoutSchema);
+module.exports = Payout;

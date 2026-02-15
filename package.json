@@ -1,0 +1,13 @@
+{
+    "name": "bepay-platform",
+    "private": true,
+    "workspaces": [
+        "frontend",
+        "backend"
+    ],
+    "scripts": {
+        "install:all": "npm install --workspaces",
+        "build:frontend": "npm run build --workspace=frontend",
+        "start:backend": "npm run start --workspace=backend"
+    }
+}

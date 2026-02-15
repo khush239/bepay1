@@ -1,12 +1,18 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
 
-const beneficiarySchema = new mongoose.Schema({
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
-    name: { type: String, required: true },
-    email: { type: String },
-    currency: { type: String, required: true },
-    accountDetails: { type: String, required: true }, // Storing as string to match previous implementation
-    mestaBeneficiaryId: { type: String },
+const Beneficiary = sequelize.define('Beneficiary', {
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    organizationId: { type: DataTypes.UUID, allowNull: false },
+    name: { type: DataTypes.STRING, allowNull: false },
+    email: { type: DataTypes.STRING },
+    currency: { type: DataTypes.STRING, allowNull: false },
+    accountDetails: { type: DataTypes.TEXT, allowNull: false }, // Store JSON string
+    mestaBeneficiaryId: { type: DataTypes.STRING },
 }, { timestamps: true });
 
-module.exports = mongoose.model('Beneficiary', beneficiarySchema);
+module.exports = Beneficiary;

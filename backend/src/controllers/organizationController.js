@@ -1,20 +1,14 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitKyc = exports.updateOrganization = exports.getOrganization = void 0;
-const Organization = require("../models/Organization");
-const User = require("../models/User");
+const { Organization } = require("../models");
 
 const getOrganization = async (req, res) => {
     try {
         const user = req.user;
-        const organization = await Organization.findOne({ userId: user._id });
+        const organization = await Organization.findOne({ where: { userId: user.id } });
 
         if (!organization) {
             return res.status(404).json({ message: 'Organization not found' });
         }
-
-        // Populate user details if needed, similar to include: { user: ... }
-        // await organization.populate('userId', 'email name');
 
         res.json(organization);
     }
@@ -23,42 +17,43 @@ const getOrganization = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-exports.getOrganization = getOrganization;
 
 const updateOrganization = async (req, res) => {
     try {
         const user = req.user;
         const { name, mestaOrgId } = req.body;
 
-        const organization = await Organization.findOneAndUpdate(
-            { userId: user._id },
+        const [updatedRows, [updatedOrg]] = await Organization.update(
             { name, mestaOrgId },
-            { new: true }
+            {
+                where: { userId: user.id },
+                returning: true
+            }
         );
 
-        res.json(organization);
+        res.json(updatedOrg);
     }
     catch (error) {
         console.error('Update Organization Error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
-exports.updateOrganization = updateOrganization;
 
 const submitKyc = async (req, res) => {
     try {
         const user = req.user;
-        // In a real app, this would handle file uploads or data sent to Mesta
         const { documentType, documentNumber } = req.body;
         const kycData = JSON.stringify({ documentType, documentNumber, submittedAt: new Date() });
 
-        const organization = await Organization.findOneAndUpdate(
-            { userId: user._id },
+        const [updatedRows, [organization]] = await Organization.update(
             {
                 kycStatus: 'VERIFIED', // Auto-verify for sandbox/demo purposes
                 kycData: kycData
             },
-            { new: true }
+            {
+                where: { userId: user.id },
+                returning: true
+            }
         );
 
         res.json({ message: 'KYC Submitted and Verified', organization });
@@ -68,4 +63,9 @@ const submitKyc = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-exports.submitKyc = submitKyc;
+
+module.exports = {
+    getOrganization,
+    updateOrganization,
+    submitKyc
+};

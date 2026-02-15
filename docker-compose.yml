@@ -1,15 +1,6 @@
 version: '3.8'
 
 services:
-  mongo:
-    image: mongo:6-alpine
-    container_name: bepay-mongo
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
   backend:
     build: ./backend
     container_name: bepay-backend
@@ -19,9 +10,14 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - DATABASE_URL=mongodb://mongo:27017/bepay
+      - PORT=5000
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bepay
+      - JWT_SECRET=your_jwt_secret
+      - MESTA_API_URL=https://api.stg.mesta.xyz/v1
+      - MESTA_API_KEY=${MESTA_API_KEY}
+      - MESTA_API_SECRET=${MESTA_API_SECRET}
     depends_on:
-      - mongo
+      - db
 
   frontend:
     build: ./frontend
@@ -34,5 +30,18 @@ services:
     depends_on:
       - backend
 
+  db:
+    image: postgres:15-alpine
+    container_name: bepay-db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=bepay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
 volumes:
-  mongo_data:
+  postgres_data:

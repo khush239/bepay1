@@ -32,7 +32,7 @@ async function runSimulation() {
             currency: 'USD',
             accountDetails: { accountNumber: '1234567890' }
         }, { headers });
-        const benId = benRes.data._id;
+        const benId = benRes.data.id;
         console.log(`   Beneficiary added: ${benId}`);
 
         // 4. Create Payout
@@ -43,7 +43,7 @@ async function runSimulation() {
             currency: 'USD',
             description: 'Webhook Test Payout'
         }, { headers });
-        const payoutId = payoutRes.data._id;
+        const payoutId = payoutRes.data.id;
         const mestaPayoutId = payoutRes.data.mestaPayoutId;
         console.log(`   Payout created: ${payoutId} (Mesta ID: ${mestaPayoutId})`);
         console.log(`   Initial Status: ${payoutRes.data.status}`);
@@ -66,9 +66,10 @@ async function runSimulation() {
         console.log('6. Verifying Payout Status...');
         // We can fetch all payouts and find ours
         const payoutsRes = await axios.get(`${API_URL}/payouts`, { headers });
-        const updatedPayout = payoutsRes.data.find(p => p._id === payoutId);
+        const updatedPayout = payoutsRes.data.find(p => p.id === payoutId);
 
         console.log(`   Final Status: ${updatedPayout.status}`);
+
 
         if (updatedPayout.status === 'COMPLETED') {
             console.log('✅ SUCCESS: Webhook updated payout status!');

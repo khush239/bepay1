@@ -1,13 +1,21 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
 
-const userSchema = new mongoose.Schema({
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    name: { type: String },
-    role: { type: String, default: 'USER', enum: ['USER', 'ADMIN'] },
-    accountNumber: { type: String, unique: true, sparse: true },
-    bankName: { type: String },
+const User = sequelize.define('User', {
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    email: { type: DataTypes.STRING, allowNull: false, unique: true },
+    password: { type: DataTypes.STRING, allowNull: false },
+    name: { type: DataTypes.STRING },
+    role: {
+        type: DataTypes.ENUM('USER', 'ADMIN'),
+        defaultValue: 'USER'
+    },
+    accountNumber: { type: DataTypes.STRING, unique: true },
+    bankName: { type: DataTypes.STRING },
 }, { timestamps: true });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;

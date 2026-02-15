@@ -1,28 +1,27 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.deposit = exports.internalTransfer = exports.updateBankingDetails = void 0;
-const User = require("../models/User");
-const Organization = require("../models/Organization");
-const Payout = require("../models/Payout");
+const { User, Organization, Payout } = require("../models");
+const sequelize = require("../config/database");
 
 // Add Banking Details
 const updateBankingDetails = async (req, res) => {
     try {
-        const userId = req.user._id;
+        const userId = req.user.id;
         const { accountNumber, bankName } = req.body;
         if (!accountNumber || !bankName) {
             return res.status(400).json({ message: 'Account Number and Bank Name are required' });
         }
-        // Check if account number is unique
-        const existing = await User.findOne({ accountNumber });
-        if (existing && existing._id.toString() !== userId.toString()) {
+        // Check if account number is unique (except for current user)
+        const existing = await User.findOne({ where: { accountNumber } });
+        if (existing && existing.id !== userId) {
             return res.status(400).json({ message: 'Account Number already in use' });
         }
 
-        const updatedUser = await User.findByIdAndUpdate(
-            userId,
+        const [updatedRows, [updatedUser]] = await User.update(
             { accountNumber, bankName },
-            { new: true }
+            {
+                where: { id: userId },
+                returning: true
+            }
         );
         res.json(updatedUser);
     }
@@ -30,55 +29,52 @@ const updateBankingDetails = async (req, res) => {
         res.status(500).json({ message: 'Error updating banking details', error });
     }
 };
-exports.updateBankingDetails = updateBankingDetails;
 
 // Internal Transfer
 const internalTransfer = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
-        const senderId = req.user._id;
+        const senderId = req.user.id;
         const { receiverAccountNumber, amount, description } = req.body;
-        const numAmount = Number(amount);
+        const numAmount = parseFloat(amount);
+
         if (!receiverAccountNumber || !numAmount || numAmount <= 0) {
+            await t.rollback();
             return res.status(400).json({ message: 'Invalid payload' });
         }
 
-        // 1. Check Sender KYC - Populate organization to check kycStatus
-        // Actually, we can just find the organization directly
-        const senderOrg = await Organization.findOne({ userId: senderId });
+        // 1. Check Sender KYC
+        const senderOrg = await Organization.findOne({ where: { userId: senderId } });
 
         if (senderOrg?.kycStatus !== 'VERIFIED') {
+            await t.rollback();
             return res.status(403).json({ message: 'KYC not verified. Cannot initiate transfer.' });
         }
 
         // 2. Find Receiver
-        const receiver = await User.findOne({ accountNumber: receiverAccountNumber });
+        const receiver = await User.findOne({ where: { accountNumber: receiverAccountNumber } });
         if (!receiver) {
+            await t.rollback();
             return res.status(404).json({ message: 'Receiver account not found' });
         }
-        if (receiver._id.toString() === senderId.toString()) {
+        if (receiver.id === senderId) {
+            await t.rollback();
             return res.status(400).json({ message: 'Cannot transfer to self' });
         }
 
-        // 3. Create Transaction (Sequential updates instead of Transaction for standalone MongoDB support)
-
-        // Check sender balance (re-fetch for safety)
-        if (!senderOrg || senderOrg.balance < numAmount) {
+        // 3. Create Transaction
+        // Check sender balance
+        if (!senderOrg || parseFloat(senderOrg.balance) < numAmount) {
             throw new Error('Insufficient funds');
         }
 
         // Deduct from sender
-        await Organization.findOneAndUpdate(
-            { userId: senderId },
-            { $inc: { balance: -numAmount } }
-        );
+        await senderOrg.decrement('balance', { by: numAmount, transaction: t });
 
-        // Add to receiver's organization (if they have one)
-        const receiverOrg = await Organization.findOne({ userId: receiver._id });
+        // Add to receiver's organization
+        const receiverOrg = await Organization.findOne({ where: { userId: receiver.id } });
         if (receiverOrg) {
-            await Organization.findOneAndUpdate(
-                { userId: receiver._id },
-                { $inc: { balance: numAmount } }
-            );
+            await receiverOrg.increment('balance', { by: numAmount, transaction: t });
         }
 
         // Create Payout record
@@ -89,34 +85,43 @@ const internalTransfer = async (req, res) => {
             status: 'COMPLETED', // Instant transfer
             description: description || 'Internal Transfer',
             senderId: senderId,
-            receiverId: receiver._id,
-        });
+            receiverId: receiver.id,
+        }, { transaction: t });
 
+        await t.commit();
         res.json({ message: 'Transfer successful', transfer });
     }
     catch (error) {
+        await t.rollback();
         console.error(error);
         res.status(500).json({ message: 'Internal transfer failed', error: error.message });
     }
 };
-exports.internalTransfer = internalTransfer;
 
 // Deposit Funds
 const deposit = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
-        const userId = req.user._id;
+        const userId = req.user.id;
         const { amount } = req.body;
-        const numAmount = Number(amount);
+        const numAmount = parseFloat(amount);
+
         if (!numAmount || numAmount <= 0) {
+            await t.rollback();
             return res.status(400).json({ message: 'Invalid amount' });
         }
 
         // Update Balance
-        const updatedOrg = await Organization.findOneAndUpdate(
-            { userId: userId },
-            { $inc: { balance: numAmount } },
-            { new: true }
-        );
+        const organization = await Organization.findOne({ where: { userId } });
+        if (!organization) {
+            await t.rollback();
+            return res.status(404).json({ message: 'Organization not found' });
+        }
+
+        await organization.increment('balance', { by: numAmount, transaction: t });
+
+        // Reload to get updated balance
+        await organization.reload({ transaction: t });
 
         // Record Transaction
         await Payout.create({
@@ -126,13 +131,20 @@ const deposit = async (req, res) => {
             status: 'COMPLETED',
             description: 'Wallet Deposit',
             receiverId: userId, // Money IN
-        });
+        }, { transaction: t });
 
-        res.json({ message: 'Deposit successful', balance: updatedOrg.balance });
+        await t.commit();
+        res.json({ message: 'Deposit successful', balance: organization.balance });
     }
     catch (error) {
+        await t.rollback();
         console.error('Deposit error', error);
         res.status(500).json({ message: 'Deposit failed', error });
     }
 };
-exports.deposit = deposit;
+
+module.exports = {
+    updateBankingDetails,
+    internalTransfer,
+    deposit
+};
